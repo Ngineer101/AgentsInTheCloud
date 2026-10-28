@@ -49,7 +49,7 @@ export async function copyTextToClipboard(text: string): Promise<void> {
 }
 
 export function looksLikeWorkspaceTemplateSpec(value: string): boolean {
-  return /^(https?:\/\/|git@|ssh:\/\/|\/|\.\/|\.\.\/|[A-Za-z]:\\|(github\.com|gitlab\.com|bitbucket\.org)\/)/i.test(value.trim());
+  return /^(https?:\/\/|git@|ssh:\/\/|entire:\/\/|\/|\.\/|\.\.\/|[A-Za-z]:\\|(github\.com|gitlab\.com|bitbucket\.org)\/)/i.test(value.trim());
 }
 
 export function shouldSearchRepositories(query: string): boolean {

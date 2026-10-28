@@ -111,8 +111,7 @@ export async function searchBitbucketRepositories(query: string, credential: Git
 export const bitbucketProvider: GitHostingProvider = {
   id: "bitbucket",
   label: "Bitbucket",
-  gitHost: "bitbucket.org",
-  gitUsername: "x-bitbucket-api-token-auth",
+  httpsGit: { host: "bitbucket.org", username: "x-bitbucket-api-token-auth" },
   tokenEnvVar: "BITBUCKET_API_TOKEN",
   // bkt, the Bitbucket CLI in the workspace image, runs config-free from BKT_* variables.
   tokenEnvAliases: ["BKT_TOKEN"],

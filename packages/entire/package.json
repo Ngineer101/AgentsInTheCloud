@@ -1,0 +1,12 @@
+{
+  "name": "@agents-in-the-cloud/entire",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@agents-in-the-cloud/core": "workspace:*",
+    "typebox": "^1.0.57"
+  }
+}

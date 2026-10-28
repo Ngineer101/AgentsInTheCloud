@@ -42,9 +42,8 @@ export interface GitHostingConnectForm {
 export interface GitHostingProvider {
   id: string;
   label: string;
-  /** HTTPS git remotes on this host receive the token from the credential helper. */
-  gitHost: string;
-  gitUsername: string;
+  /** HTTPS git remotes on this host receive the token from the credential helper. Omitted when git authenticates through the provider's own remote helper. */
+  httpsGit?: { host: string; username: string };
   /** Workspace environment variable holding the token placeholder. */
   tokenEnvVar: string;
   /** More workspace variables holding the same placeholder, for provider CLIs that read their own name. */
@@ -57,6 +56,8 @@ export interface GitHostingProvider {
   credential(): GitHostingCredential | undefined;
   saveCredential(credential: GitHostingCredential): void;
   clearCredential(): void;
+  /** The token's stand-in inside workspaces, for tools that need it to look like a real token. Defaults to the plain placeholder. */
+  workspacePlaceholder?(credential: GitHostingCredential, placeholder: string): string;
   /** Non-secret workspace environment derived from the credential. */
   workspaceEnv(credential: GitHostingCredential): Record<string, string>;
   validateCredential(credential: GitHostingCredential): Promise<GitHostingValidation>;
@@ -117,11 +118,11 @@ export async function parseGitHostingResponse<Schema extends TSchema>(response: 
   }
 }
 
-type CredentialHelperProvider = Pick<GitHostingProvider, "gitHost" | "gitUsername" | "tokenEnvVar">;
+type CredentialHelperProvider = Pick<GitHostingProvider, "httpsGit" | "tokenEnvVar">;
 
 // Submodule URLs are repository-controlled, so each token is only offered to its own host.
 export function gitCredentialHelperShellBody(providers: readonly CredentialHelperProvider[]): string {
-  const cases = providers.map((provider) => `    ${provider.gitHost}|${provider.gitHost}:443) username=${provider.gitUsername}; token="\${${provider.tokenEnvVar}:-}" ;;`).join("\n");
+  const cases = providers.flatMap(({ httpsGit, tokenEnvVar }) => httpsGit ? [`    ${httpsGit.host}|${httpsGit.host}:443) username=${httpsGit.username}; token="\${${tokenEnvVar}:-}" ;;`] : []).join("\n");
   return `test "$1" = get || exit 0
 protocol=
 host=

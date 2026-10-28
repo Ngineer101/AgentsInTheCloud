@@ -88,8 +88,7 @@ export async function searchGitLabProjects(query: string, token: string | undefi
 export const gitLabProvider: GitHostingProvider = {
   id: "gitlab",
   label: "GitLab",
-  gitHost: "gitlab.com",
-  gitUsername: "oauth2",
+  httpsGit: { host: "gitlab.com", username: "oauth2" },
   tokenEnvVar: "GITLAB_TOKEN",
   tokenEnvAliases: [],
   tokenHosts: ["gitlab.com"],

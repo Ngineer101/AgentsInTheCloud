@@ -2,6 +2,7 @@
 // Source: https://github.com/simple-icons/simple-icons
 // Most icons: develop branch fetched 2026-06-30. OpenAI: simple-icons 14.0.0.
 // Exception: `pi` is the colored mark from https://pi.dev, normalized to the 24×24 viewBox.
+// Exception: `entire` is the mark from https://entire.com/favicon.svg, normalized to the 24×24 viewBox.
 // Exception: `radius` is the mark from https://radius.earendil.com, normalized to the 24×24 viewBox.
 
 import { escapeHtml } from "./html.ts";
@@ -53,6 +54,7 @@ const brandIcons: BrandIconRegistry = {
     { path: "M6 24H0V6h6v6h6v6H6v6Z", fill: "#4D9ABF" },
     { path: "M24 24h-6V12h6v12Z", fill: "#F1BE58" },
   ] },
+  entire: { title: "entire", path: "M13.2 0.165c1.2075-0.3225 2.4975-0.1575 3.5775 0.4575l5.6025 3.1875c0.2325 0.135 0.1875 0.48-0.0675 0.5475l-12.5625 3.3675c-1.2675 0.3375-2.0175 1.6425-1.68 2.91l0.615 2.295c0.3375 1.2675 1.6425 2.0175 2.91 1.68l7.1775-1.875 3.4575 3.555c0.6675 0.6675 1.0425 1.575 1.0425 2.52v1.905c0 1.2375-0.9525 2.2725-2.19 2.37l-11.7075 0.9c-1.3875 0.105-2.7525-0.3975-3.735-1.3875l-3.8325-3.855c-0.66-0.6675-1.035-1.5675-1.035-2.5125v-1.9125c0-1.2375 1.125-2.31 2.25-2.31h1.5l-2.8875-2.28c-0.45-0.3225-0.78-0.7875-0.9225-1.32l-0.6075-2.2725c-0.3375-1.2675 0.4125-2.5725 1.68-2.91L13.2 0.165ZM15.015 10.455c0 1.035-0.84 1.875-1.875 1.875s-1.875-0.84-1.875-1.875 0.84-1.875 1.875-1.875 1.875 0.84 1.875 1.875ZM21.015 8.955c0 1.035-0.84 1.875-1.875 1.875s-1.875-0.84-1.875-1.875 0.84-1.875 1.875-1.875 1.875 0.84 1.875 1.875Z" },
   radius: { title: "radius", path: "M24 6h-3c0 3.0557-.9171 5.9014-2.4857 8.2714l5.4857 5.4857-4.2429 4.2429-5.4857-5.4857A14.9143 14.9143 0 0 1 6 21v3H0V6h6V0h18zM6 6v9c4.9714 0 9-4.0286 9-9z" },
   opencode: { title: "opencode", path: "M22 24H2V0h20zM17 4.8H7v14.4h10z" },
   x: { title: "x", path: "M14.234 10.162 22.977 0h-2.072l-7.591 8.824L7.251 0H.258l9.168 13.343L.258 24H2.33l8.016-9.318L16.749 24h6.993zm-2.837 3.299-.929-1.329L3.076 1.56h3.182l5.965 8.532.929 1.329 7.754 11.09h-3.182z" },
@@ -62,6 +64,7 @@ const providerIconAliases: BrandStringRegistry = {
   github: "github",
   gitlab: "gitlab",
   bitbucket: "bitbucket",
+  entire: "entire",
   openai: "openai",
   "openai-codex": "openai",
   anthropic: "anthropic",
@@ -155,6 +158,7 @@ const providerBrandColors: BrandStringRegistry = {
   github: "#24292f",
   gitlab: "#FC6D26",
   bitbucket: "#0052CC",
+  entire: "#1C1917",
 };
 
 function providerInitial(label: string): string {
