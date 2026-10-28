@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { gitCredentialHelperShellBody, gitHostingShorthandUrl } from "../src/index.ts";
 
-async function runCredentialHelper(input: string, env: Record<string, string> = { GH_TOKEN: "github-secret", GITLAB_TOKEN: "gitlab-secret", BITBUCKET_API_TOKEN: "bitbucket-secret" }): Promise<string> {
+async function runCredentialHelper(input: string, env: Record<string, string> = { GH_TOKEN: "github-secret", GITLAB_TOKEN: "gitlab-secret", BITBUCKET_API_TOKEN: "bitbucket-secret", ENTIRE_TOKEN: "entire-secret" }): Promise<string> {
   const proc = Bun.spawn(["sh", "-c", gitCredentialHelperShellBody, "agents-in-the-cloud-git-credential", "get"], {
     env: { PATH: process.env.PATH ?? "", ...env },
     stdin: "pipe",
@@ -24,6 +24,8 @@ describe("git credential helper", () => {
     expect(await runCredentialHelper("protocol=https\nhost=example.com\n\n")).toBe("");
     expect(await runCredentialHelper("protocol=https\nhost=gitlab.com.evil.test\n\n")).toBe("");
     expect(await runCredentialHelper("protocol=ssh\nhost=github.com\n\n")).toBe("");
+    // Entire remotes are entire:// URLs; git-remote-entire sends the token itself.
+    expect(await runCredentialHelper("protocol=https\nhost=aws-eu-central-1.entire.io\n\n")).toBe("");
   });
 
   test("stays quiet for hosts whose provider is not connected", async () => {
@@ -43,4 +45,5 @@ test("expands provider shorthand to HTTPS URLs", () => {
   expect(gitHostingShorthandUrl("GitLab.com/group/sub/project")).toBe("https://GitLab.com/group/sub/project");
   expect(gitHostingShorthandUrl("bitbucket.org/workspace/repo#main")).toBe("https://bitbucket.org/workspace/repo#main");
   expect(gitHostingShorthandUrl("example.com/org/repo")).toBeUndefined();
+  expect(gitHostingShorthandUrl("entire.com/et/project/repo")).toBeUndefined();
 });

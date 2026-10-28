@@ -8,6 +8,7 @@
   "dependencies": {
     "@agents-in-the-cloud/bitbucket": "workspace:*",
     "@agents-in-the-cloud/core": "workspace:*",
+    "@agents-in-the-cloud/entire": "workspace:*",
     "@agents-in-the-cloud/github": "workspace:*",
     "@agents-in-the-cloud/gitlab": "workspace:*"
   }

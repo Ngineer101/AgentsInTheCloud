@@ -33,7 +33,7 @@ The computer where AgentsInTheCloud is installed, which may differ from the devi
 _Avoid_: This computer (when the installation computer is meant), System container (as the computer's identity)
 
 **Git hosting provider**:
-A service hosting Git repositories that AgentsInTheCloud can connect to: GitHub, GitLab, or Bitbucket.
+A service hosting Git repositories that AgentsInTheCloud can connect to: GitHub, GitLab, Bitbucket, or Entire.
 _Avoid_: Forge, Git provider, GitHub (when any provider is meant)
 
 **Git hosting connection**:

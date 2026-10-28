@@ -18,8 +18,7 @@ function discoverGitHubToken(): string | undefined {
 export const gitHubProvider: GitHostingProvider = {
   id: "github",
   label: "GitHub",
-  gitHost: "github.com",
-  gitUsername: "x-access-token",
+  httpsGit: { host: "github.com", username: "x-access-token" },
   tokenEnvVar: "GH_TOKEN",
   tokenEnvAliases: [],
   tokenHosts: ["github.com", "api.github.com"],

@@ -58,7 +58,8 @@ export async function createWorkspaceSecretContext(workspaceId: string, init?: W
   const secrets: Record<string, SecretDefinition> = {};
   const plainEnv: Record<string, string> = {};
   for (const { provider, credential } of connectedGitHostingProviders()) {
-    const placeholder = workspaceTemplateSecretPlaceholder(provider.tokenEnvVar);
+    const defaultPlaceholder = workspaceTemplateSecretPlaceholder(provider.tokenEnvVar);
+    const placeholder = provider.workspacePlaceholder?.(credential, defaultPlaceholder) ?? defaultPlaceholder;
     secrets[provider.tokenEnvVar] = { value: credential.token, hosts: provider.tokenHosts, placeholder };
     Object.assign(plainEnv, provider.workspaceEnv(credential));
     for (const alias of provider.tokenEnvAliases) plainEnv[alias] = placeholder;

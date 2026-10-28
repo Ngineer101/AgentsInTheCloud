@@ -71,6 +71,22 @@ describe("workspace secrets", () => {
     await expect(context.hooks.onRequest(new Request("https://example.com/", { headers: { authorization: `Bearer ${context.env.GITLAB_TOKEN}` } }))).rejects.toThrow("secret GITLAB_TOKEN not allowed for host: example.com");
   });
 
+  test("gives workspaces a JWT-shaped Entire placeholder that only *.entire.io receives", async () => {
+    const base64Url = (json: string) => Buffer.from(json).toString("base64url");
+    const token = `${base64Url('{"alg":"EdDSA"}')}.${base64Url('{"aud":["https://eu.auth.entire.io"],"sub":"someone","exp":4102444800}')}.signature`;
+    saveGitHostingCredential(gitHostingProvider("entire"), { token });
+    const context = await createWorkspaceSecretContext("test-workspace");
+
+    const [, claims, signature] = context.env.ENTIRE_TOKEN!.split(".");
+    // git-remote-entire reads the audience before sending anything; nothing else about the real token leaks.
+    expect(JSON.parse(Buffer.from(claims!, "base64url").toString())).toEqual({ aud: ["https://eu.auth.entire.io"] });
+    expect(signature).toBe("AGENTSINTHECLOUD_PROXY_READY_ENTIRE_TOKEN");
+
+    const cluster = await context.hooks.onRequest(new Request("https://camembert.aws-eu-central-1.entire.io/et/p/r/info/refs?service=git-upload-pack", { headers: { authorization: `Bearer ${context.env.ENTIRE_TOKEN}` } }));
+    expect(cluster.headers.get("authorization")).toBe(`Bearer ${token}`);
+    await expect(context.hooks.onRequest(new Request("https://entire.io.example.com/", { headers: { authorization: `Bearer ${context.env.ENTIRE_TOKEN}` } }))).rejects.toThrow("secret ENTIRE_TOKEN not allowed for host");
+  });
+
   test("connecting a provider refreshes cached workspace contexts", async () => {
     expect((await getWorkspaceSecretContext("test-workspace", async () => undefined)).env.GITLAB_TOKEN).toBeUndefined();
     saveGitHostingCredential(gitHostingProvider("gitlab"), { token: "gitlab-secret" });

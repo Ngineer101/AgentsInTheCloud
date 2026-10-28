@@ -1,9 +1,10 @@
 import { gitCredentialHelperShellBody as credentialHelperShellBody, invalidArguments, type GitHostingCredential, type GitHostingProvider } from "@agents-in-the-cloud/core";
 import { bitbucketProvider } from "@agents-in-the-cloud/bitbucket";
+import { entireProvider } from "@agents-in-the-cloud/entire";
 import { gitHubProvider } from "@agents-in-the-cloud/github";
 import { gitLabProvider } from "@agents-in-the-cloud/gitlab";
 
-export const gitHostingProviders: readonly GitHostingProvider[] = [gitHubProvider, gitLabProvider, bitbucketProvider];
+export const gitHostingProviders: readonly GitHostingProvider[] = [gitHubProvider, gitLabProvider, bitbucketProvider, entireProvider];
 
 export function gitHostingProvider(id: string): GitHostingProvider {
   const provider = gitHostingProviders.find((candidate) => candidate.id === id);
@@ -47,5 +48,5 @@ export const gitHostingKnownHosts = gitHostingProviders.map((provider) => provid
 
 /** `github.com/org/repo` style shorthand for a provider-hosted repository. */
 export function gitHostingShorthandUrl(spec: string): string | undefined {
-  return gitHostingProviders.some((provider) => spec.toLowerCase().startsWith(`${provider.gitHost}/`)) ? `https://${spec}` : undefined;
+  return gitHostingProviders.some(({ httpsGit }) => httpsGit && spec.toLowerCase().startsWith(`${httpsGit.host}/`)) ? `https://${spec}` : undefined;
 }
