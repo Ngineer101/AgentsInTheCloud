@@ -640,7 +640,7 @@ export const agentsInTheCloudClientModule: WorkspaceClientModule = {
         if (!element) return;
         // SAFETY: This element belongs to the controller registered above.
         const controller = application.getControllerForElementAndIdentifier(element, "changes-diff-endpoints") as InstanceType<ReturnType<typeof createDiffEndpointsController>>;
-        controller.refresh();
+        controller.refreshWhenShown();
       });
     });
   },

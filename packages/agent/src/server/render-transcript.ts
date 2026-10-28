@@ -49,8 +49,7 @@ function renderUserMessage(ctx: AgentRenderContext, user: Extract<TranscriptItem
   const images = user.images.length ? `<div class="agent-user-attachments">${user.images.map((image) => `<img${fullscreenAttributes("attachment", "media")} src="${escapeHtml(sessionImageUrl(ctx, image))}" alt="attachment" loading="lazy">`).join("")}</div>` : "";
   const label = user.queued?.stranded ? "Not sent · the turn ended early"
     : user.queued?.mode === "followUp" ? "Follow-up · after this turn"
-    : user.queued ? "Steering · after this step"
-    : user.steering ? "Steering" : "";
+    : user.queued ? "Steering · after this step" : "";
   const actions = user.queued && !ctx.readOnly ? renderQueuedInputActions(ctx, user.key, user.queued) : "";
   return transcriptRow(`<div class="agent-user" data-agent-user-text="${escapeHtml(user.text)}"><div class="agent-user-bubble markdown">${label ? `<div class="agent-user-label"><span>${label}</span>${actions}</div>` : ""}${markdown(ctx, user.text)}${images}</div></div>`);
 }
@@ -184,18 +183,18 @@ export function renderWorkingSection(ctx: AgentRenderContext, section: WorkingTr
 }
 
 function workingSummary(ctx: AgentRenderContext, section: WorkingTranscriptItem): DisclosureSummary {
-  const steeringCount = section.items.filter((item) => item.type === "user" && item.steering).length;
   const endedAt = section.completedAt ?? section.stoppedAt;
   const active = endedAt === undefined;
   const duration = formatDuration(active ? Date.now() - section.startedAt : section.timing?.elapsedMs ?? (endedAt! - section.startedAt));
-  const stateLabel = active ? "Working" : section.completedAt !== undefined ? "Completed" : "Stopped";
-  const activityLabel = section.durationUnavailable ? stateLabel : `${stateLabel} · ${duration}`;
+  const completed = section.completedAt !== undefined;
+  const activityLabel = section.durationUnavailable ? (active ? "Working" : completed ? "Completed" : "Stopped")
+    : active ? `Working · ${duration}` : completed ? `Worked for ${duration}` : `Stopped · ${duration}`;
   const status = active ? `<i class="status-dot running${ctx.readOnly ? " static" : ""} content-row__status" aria-label="In progress"></i>` : "";
   return { ...transcriptRowContent({ kind: "text", text: activityLabel,
     attributesHtml: active && !ctx.readOnly && !section.durationUnavailable ? `data-controller="agent-elapsed" data-agent-elapsed-since-value="${section.startedAt}" data-agent-elapsed-prefix-value="Working · " data-agent-elapsed-format-value="duration"` : undefined,
     textAttributesHtml: active && !ctx.readOnly && !section.durationUnavailable ? 'data-agent-elapsed-target="time"' : undefined,
   }, {
-    leadingHtml: status, trailingHtml: `${steeringCount ? `<span class="agent-working-timing">${steeringCount} steering ${steeringCount === 1 ? "message" : "messages"}</span>` : ""}${active ? "" : renderWorkingTiming(section)}`,
+    leadingHtml: status, trailingHtml: active ? "" : renderWorkingTiming(section),
   }), attributesHtml: `id="${ids.itemSummaryContent(ctx, section.key)}"` };
 }
 
