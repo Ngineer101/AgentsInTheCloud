@@ -1,5 +1,11 @@
 {
+  "files": [
+    {
+      "from": "install.sh",
+      "to": "/tmp/install-entire.sh"
+    }
+  ],
   "run": [
-    "set -eux; entire_version=0.12.2; case \"$(dpkg --print-architecture)\" in amd64) entire_sha256=bfc5c8d5b599f328775b89b735db020c963e307b6a324fc30ce371fe8fa789e8 ;; arm64) entire_sha256=f08a1b8c6352d3f78076268dc67b0b273d7f62dbab94b15aec028e7b4257ad0c ;; *) echo \"unsupported entire architecture: $(dpkg --print-architecture)\" >&2; exit 1 ;; esac; entire_archive=\"/tmp/entire_${entire_version}_$(dpkg --print-architecture).tar.gz\"; curl -fsSL \"https://github.com/entireio/cli/releases/download/v${entire_version}/entire_linux_$(dpkg --print-architecture).tar.gz\" -o \"$entire_archive\"; echo \"${entire_sha256}  ${entire_archive}\" | sha256sum -c -; tar -xzf \"$entire_archive\" -C /usr/local/bin entire git-remote-entire; chmod 0755 /usr/local/bin/entire /usr/local/bin/git-remote-entire; rm -f \"$entire_archive\"; git-remote-entire --version"
+    "sh /tmp/install-entire.sh entire git-remote-entire && rm /tmp/install-entire.sh"
   ]
 }

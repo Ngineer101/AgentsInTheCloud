@@ -1,5 +1,5 @@
-import { parseGitHostingResponse, readGitHostingCredentialFile, removeGitHostingCredentialFile, writeGitHostingCredentialFile, type GitHostingCredential, type GitHostingProvider, type GitHostingRepository, type GitHostingRepositorySearch, type GitHostingValidation } from "@agents-in-the-cloud/core";
-import { Type, type Static } from "typebox";
+import { createGitHostingCache, parseGitHostingResponse, readGitHostingCredentialFile, removeGitHostingCredentialFile, writeGitHostingCredentialFile, type GitHostingCredential, type GitHostingProvider, type GitHostingRepository, type GitHostingRepositorySearch, type GitHostingValidation } from "@agents-in-the-cloud/core";
+import { Type, type Static, type TSchema } from "typebox";
 import { Value } from "typebox/value";
 
 const tokenFile = "entire-token";
@@ -26,16 +26,19 @@ const reposResponseSchema = Type.Object({
   repos: Type.Array(Type.Object({
     full_name: Type.String(),
     provider: Type.String(),
-    visibility: Type.Optional(Type.String()),
-    clusterSlug: Type.Optional(Type.String()),
-    placements: Type.Optional(Type.Array(Type.Object({ clusterSlug: Type.String(), mirror: Type.Boolean(), status: Type.String() }))),
+    visibility: Type.String(),
+    placements: Type.Array(Type.Object({ clusterSlug: Type.String(), mirror: Type.Boolean(), status: Type.String() })),
   })),
 });
 
+const clustersResponseSchema = Type.Object({
+  clusters: Type.Array(Type.Object({ slug: Type.String(), publicUrl: Type.String() })),
+});
+
 interface EntireToken {
-  apiBase: string;
-  audience: string;
-  expiresAt: number | undefined;
+  /** The home login server, which also serves the API. */
+  origin: string;
+  expired: boolean;
 }
 
 type TokenClaims = Static<typeof tokenClaimsSchema>;
@@ -49,27 +52,19 @@ function decodeClaims(segment: string): TokenClaims | undefined {
   }
 }
 
-function base64UrlJson(json: string): string {
-  return Buffer.from(json).toString("base64url");
+/** The https://*.entire.io origin of a URL, or undefined: tokens are only ever sent there. */
+function entireOrigin(value: string): string | undefined {
+  const url = URL.parse(value);
+  return url?.protocol === "https:" && url.hostname.endsWith(".entire.io") && url.pathname === "/" && !url.search && !url.username ? url.origin : undefined;
 }
 
-/** Undefined unless the token is a JWT for an https://*.entire.io login server: the token is only ever sent there. */
+/** Undefined unless the token is a JWT for an Entire login server. Opaque audiences such as the OAuth client id are skipped. */
 export function parseEntireToken(token: string): EntireToken | undefined {
   const segments = token.trim().split(".");
-  if (segments.length !== 3) return undefined;
-  const claims = decodeClaims(segments[1]!);
-  if (!claims) return undefined;
-  for (const audience of [claims.aud].flat()) {
-    let url: URL;
-    try {
-      url = new URL(audience);
-    } catch {
-      continue;
-    }
-    if (url.protocol !== "https:" || !url.hostname.endsWith(".entire.io") || url.pathname !== "/" || url.search || url.username) return undefined;
-    return { apiBase: `${url.origin}/api/v1`, audience: url.origin, expiresAt: claims.exp === undefined ? undefined : claims.exp * 1000 };
-  }
-  return undefined;
+  const claims = segments.length === 3 ? decodeClaims(segments[1]!) : undefined;
+  const audience = claims && [claims.aud].flat().find((candidate) => URL.canParse(candidate));
+  const origin = audience && entireOrigin(audience);
+  return origin ? { origin, expired: claims.exp !== undefined && claims.exp * 1000 <= Date.now() } : undefined;
 }
 
 function headers(token: string): HeadersInit {
@@ -80,16 +75,16 @@ function optionalTrimmed(value: string | undefined): string | undefined {
   return value?.trim() || undefined;
 }
 
-export async function validateEntireToken(token: string, now = Date.now()): Promise<GitHostingValidation> {
+export async function validateEntireToken(token: string): Promise<GitHostingValidation> {
   const trimmed = token.trim();
   if (!trimmed) return { ok: false, message: "Paste the output of entire auth token." };
   const parsed = parseEntireToken(trimmed);
   if (!parsed) return { ok: false, message: "That doesn’t look like an Entire token. Paste the output of entire auth token." };
-  if (parsed.expiresAt !== undefined && parsed.expiresAt <= now) return { ok: false, message: "That token has expired. Run entire auth token again." };
+  if (parsed.expired) return { ok: false, message: "That token has expired. Run entire auth token again." };
 
   let response: Response;
   try {
-    response = await fetch(`${parsed.apiBase}/me`, { headers: headers(trimmed) });
+    response = await fetch(`${parsed.origin}/api/v1/me`, { headers: headers(trimmed) });
   } catch {
     return { ok: false, message: "Could not reach Entire. Check your network and try again." };
   }
@@ -106,36 +101,62 @@ export async function validateEntireToken(token: string, now = Date.now()): Prom
   return { ok: true, identity: { name, email } };
 }
 
-/** The entire:// remote that git-remote-entire clones, preferring a repository's primary placement. */
-function cloneUrl(repo: Static<typeof reposResponseSchema>["repos"][number]): string | undefined {
-  const placement = repo.placements?.find((candidate) => !candidate.mirror && candidate.status === "ready") ?? repo.placements?.find((candidate) => candidate.status === "ready");
-  const cluster = placement?.clusterSlug ?? repo.clusterSlug;
-  if (!cluster || !/^[a-z0-9-]+$/.test(cluster)) return undefined;
-  const namespace = repo.provider === "github" ? "gh" : "et";
-  return `entire://${cluster}.entire.io/${namespace}/${repo.full_name}`;
+type EntireRepository = Static<typeof reposResponseSchema>["repos"][number];
+
+/** The entire:// remote git-remote-entire clones: a native repository's primary placement, or any ready GitHub mirror. */
+function cloneUrl(repo: EntireRepository, clusterHosts: ReadonlyMap<string, string>): string | undefined {
+  const ready = repo.placements.filter((placement) => placement.status === "ready");
+  const placement = ready.find((candidate) => !candidate.mirror) ?? ready[0];
+  const host = placement && clusterHosts.get(placement.clusterSlug);
+  return host ? `entire://${host}/${repo.provider === "github" ? "gh" : "et"}/${repo.full_name}` : undefined;
+}
+
+class EntireAccessError extends Error {}
+
+async function fetchEntire<Schema extends TSchema>(origin: string, path: string, token: string, schema: Schema): Promise<Static<Schema>> {
+  const response = await fetch(`${origin}/api/v1${path}`, { headers: headers(token) });
+  if (response.status === 401) throw new EntireAccessError();
+  if (!response.ok) throw new Error(`Entire ${path} failed: ${response.status} ${await response.text()}`);
+  const body = await parseGitHostingResponse(response, schema);
+  if (!body) throw new Error(`Entire returned an invalid ${path} response`);
+  return body;
+}
+
+const clusterCache = createGitHostingCache<ReadonlyMap<string, string>>(10 * 60_000);
+
+/** Cluster slug to clone host, keeping only clusters whose public URL is an Entire origin. */
+async function loadClusterHosts(origin: string, token: string): Promise<ReadonlyMap<string, string>> {
+  const { clusters } = await fetchEntire(origin, "/clusters", token, clustersResponseSchema);
+  return new Map(clusters.flatMap((cluster) => {
+    const clusterOrigin = entireOrigin(cluster.publicUrl);
+    return clusterOrigin ? [[cluster.slug, new URL(clusterOrigin).host] as const] : [];
+  }));
 }
 
 export async function searchEntireRepositories(query: string, credential: GitHostingCredential | undefined): Promise<GitHostingRepositorySearch> {
   if (!credential) return { repositories: [], notice: "Connect Entire to search your repositories." };
   const parsed = parseEntireToken(credential.token);
-  if (!parsed) return { repositories: [], notice: "Your Entire token is invalid. Connect Entire again." };
-  if (parsed.expiresAt !== undefined && parsed.expiresAt <= Date.now()) return { repositories: [], notice: "Your Entire token has expired. Connect Entire again." };
-
-  const url = new URL(`${parsed.apiBase}/repos`);
-  url.searchParams.set("q", query.trim());
-  url.searchParams.set("pageSize", "25");
-  const response = await fetch(url, { headers: headers(credential.token) });
-  if (response.status === 401) return { repositories: [], notice: "Entire rejected your token. Connect Entire again." };
-  if (!response.ok) throw new Error(`Entire repository search failed: ${response.status} ${await response.text()}`);
-  const body = await parseGitHostingResponse(response, reposResponseSchema);
-  if (!body) throw new Error("Entire returned an invalid repository search response");
-  return {
-    repositories: body.repos.flatMap((repo): GitHostingRepository[] => {
-      const url = cloneUrl(repo);
-      return url ? [{ fullName: repo.full_name, description: null, private: repo.visibility !== "public", cloneUrl: url, personal: true }] : [];
-    }),
-  };
+  if (!parsed || parsed.expired) return { repositories: [], notice: "Your Entire token has expired. Connect Entire again." };
+  const { origin } = parsed;
+  try {
+    const [clusterHosts, { repos }] = await Promise.all([
+      clusterCache(credential, "clusters", () => loadClusterHosts(origin, credential.token)),
+      fetchEntire(origin, `/repos?${new URLSearchParams({ q: query, pageSize: "25" })}`, credential.token, reposResponseSchema),
+    ]);
+    return {
+      repositories: repos.flatMap((repo): GitHostingRepository[] => {
+        const url = cloneUrl(repo, clusterHosts);
+        return url ? [{ fullName: repo.full_name, description: null, private: repo.visibility !== "public", cloneUrl: url, personal: true }] : [];
+      }),
+    };
+  } catch (error) {
+    if (error instanceof EntireAccessError) return { repositories: [], notice: "Entire rejected your token. Connect Entire again." };
+    throw error;
+  }
 }
+
+// git-remote-entire refuses unsigned (alg: none) tokens without verifying signatures, so the stand-in claims EdDSA.
+const placeholderHeader = Buffer.from(JSON.stringify({ alg: "EdDSA", typ: "JWT" })).toString("base64url");
 
 /**
  * git-remote-entire reads the token's audience before it sends anything, so workspaces get a JWT-shaped stand-in
@@ -143,8 +164,10 @@ export async function searchEntireRepositories(query: string, credential: GitHos
  */
 export function entireWorkspacePlaceholder(credential: GitHostingCredential, placeholder: string): string {
   const parsed = parseEntireToken(credential.token);
+  // A stored token that isn't an Entire token can't authenticate anyway; the plain placeholder fails just as visibly.
   if (!parsed) return placeholder;
-  return `${base64UrlJson(JSON.stringify({ alg: "EdDSA", typ: "JWT" }))}.${base64UrlJson(JSON.stringify({ aud: [parsed.audience] }))}.${placeholder}`;
+  const claims = Buffer.from(JSON.stringify({ aud: [parsed.origin] })).toString("base64url");
+  return `${placeholderHeader}.${claims}.${placeholder}`;
 }
 
 export const entireProvider: GitHostingProvider = {
