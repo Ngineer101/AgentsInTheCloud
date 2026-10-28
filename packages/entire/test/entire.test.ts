@@ -22,9 +22,10 @@ afterEach(() => {
 
 describe("Entire tokens", () => {
   test("talk to the API of the login server they were issued for", () => {
-    expect(parseEntireToken(token)).toEqual({ apiBase: "https://eu.auth.entire.io/api/v1", audience: "https://eu.auth.entire.io", expiresAt: 4102444800_000 });
+    expect(parseEntireToken(token)).toEqual({ origin: "https://eu.auth.entire.io", expired: false });
+    expect(parseEntireToken(jwt({ aud: "https://eu.auth.entire.io", exp: 1 }))).toEqual({ origin: "https://eu.auth.entire.io", expired: true });
     // Opaque audiences such as the OAuth client id are skipped.
-    expect(parseEntireToken(jwt({ aud: ["entire-cli", "https://us.auth.entire.io"] }))?.apiBase).toBe("https://us.auth.entire.io/api/v1");
+    expect(parseEntireToken(jwt({ aud: ["entire-cli", "https://us.auth.entire.io"] }))?.origin).toBe("https://us.auth.entire.io");
   });
 
   test("are never sent anywhere but an https://*.entire.io origin", () => {
@@ -67,17 +68,29 @@ describe("Entire credential validation", () => {
 });
 
 describe("Entire repository search", () => {
-  test("clones native repositories and GitHub mirrors through their placements", async () => {
-    const requests = stubFetch(() => Response.json({ repos: [
-      { full_name: "project/native", provider: "entire", visibility: "private", clusterSlug: "aws-us-east-2", placements: [{ clusterSlug: "aws-eu-central-1", mirror: false, status: "ready" }] },
-      { full_name: "octo/mirror", provider: "github", visibility: "public", placements: [{ clusterSlug: "aws-us-east-2", mirror: true, status: "ready" }] },
-      { full_name: "project/provisioning", provider: "entire", placements: [] },
-    ] }));
+  test("clones native repositories and GitHub mirrors through their placements' cluster hosts", async () => {
+    const requests = stubFetch((url) => url.pathname.endsWith("/clusters")
+      ? Response.json({ clusters: [
+        { slug: "aws-eu-central-1", publicUrl: "https://aws-eu-central-1.entire.io" },
+        { slug: "aws-us-east-2", publicUrl: "https://aws-us-east-2.entire.io" },
+        { slug: "spoofed", publicUrl: "https://aws-us-east-2.entire.io@evil.example.com" },
+      ] })
+      : Response.json({ repos: [
+        { full_name: "project/native", provider: "entire", visibility: "private", placements: [{ clusterSlug: "aws-us-east-2", mirror: true, status: "ready" }, { clusterSlug: "aws-eu-central-1", mirror: false, status: "ready" }] },
+        { full_name: "octo/mirror", provider: "github", visibility: "public", placements: [{ clusterSlug: "aws-us-east-2", mirror: true, status: "ready" }] },
+        { full_name: "project/provisioning", provider: "entire", visibility: "private", placements: [{ clusterSlug: "aws-us-east-2", mirror: false, status: "creating" }] },
+        { full_name: "project/spoofed", provider: "entire", visibility: "private", placements: [{ clusterSlug: "spoofed", mirror: false, status: "ready" }] },
+      ] }));
     expect(await searchEntireRepositories("re", { token })).toEqual({ repositories: [
       { fullName: "project/native", description: null, private: true, cloneUrl: "entire://aws-eu-central-1.entire.io/et/project/native", personal: true },
       { fullName: "octo/mirror", description: null, private: false, cloneUrl: "entire://aws-us-east-2.entire.io/gh/octo/mirror", personal: true },
     ] });
-    expect(requests.map(String)).toEqual(["https://eu.auth.entire.io/api/v1/repos?q=re&pageSize=25"]);
+    expect(requests.map(String).sort()).toEqual(["https://eu.auth.entire.io/api/v1/clusters", "https://eu.auth.entire.io/api/v1/repos?q=re&pageSize=25"]);
+  });
+
+  test("asks to reconnect when Entire rejects the token", async () => {
+    stubFetch(() => new Response("", { status: 401 }));
+    expect(await searchEntireRepositories("rejected", { token })).toEqual({ repositories: [], notice: "Entire rejected your token. Connect Entire again." });
   });
 
   test("asks to reconnect once the token expires", async () => {

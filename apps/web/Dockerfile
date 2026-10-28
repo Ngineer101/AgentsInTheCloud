@@ -49,14 +49,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       tmux
 
 # Template clones of entire:// repositories run here, through Entire's git remote helper.
-ARG TARGETARCH
-RUN set -eux; entire_version=0.12.2; \
-    case "$TARGETARCH" in amd64) entire_sha256=bfc5c8d5b599f328775b89b735db020c963e307b6a324fc30ce371fe8fa789e8 ;; arm64) entire_sha256=f08a1b8c6352d3f78076268dc67b0b273d7f62dbab94b15aec028e7b4257ad0c ;; *) echo "unsupported architecture: $TARGETARCH" >&2; exit 1 ;; esac; \
-    curl -fsSL "https://github.com/entireio/cli/releases/download/v${entire_version}/entire_linux_${TARGETARCH}.tar.gz" -o /tmp/entire.tar.gz; \
-    echo "${entire_sha256}  /tmp/entire.tar.gz" | sha256sum -c -; \
-    tar -xzf /tmp/entire.tar.gz -C /usr/local/bin git-remote-entire; \
-    rm /tmp/entire.tar.gz; \
-    git-remote-entire --version
+COPY packages/entire/install.sh /tmp/install-entire.sh
+RUN sh /tmp/install-entire.sh git-remote-entire && rm /tmp/install-entire.sh
 
 COPY --from=bun-dist /usr/local/bin/bun /usr/local/bin/bun
 COPY --from=bun-dist /usr/local/bin/bunx /usr/local/bin/bunx
@@ -73,6 +67,7 @@ ENV ATELIER_DATA_DIR=/data/app
 COPY --from=deps /app/node_modules /app/node_modules
 COPY --from=build --exclude=node_modules /app /app
 # Built beforehand with local Go by scripts/build-agents-in-the-cloud-image.ts.
+ARG TARGETARCH
 COPY packages/workspace-helper/dist/linux-${TARGETARCH}/aitc-workspace-helper /app/packages/workspace-helper/workspace_tools/aitc-workspace-helper
 RUN printf '%s\n' '#!/usr/bin/env sh' 'exec /usr/local/bin/bun /app/packages/proxy-ingress/src/ingress/tailscale-serve-helper.ts "$@"' > /usr/local/bin/agents-in-the-cloud-tailscale-serve-helper \
  && chmod 755 /usr/local/bin/agents-in-the-cloud-tailscale-serve-helper /app/apps/web/docker-entrypoint.sh
